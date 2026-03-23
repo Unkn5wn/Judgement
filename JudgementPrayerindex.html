@@ -1,0 +1,183 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>IP Address Finder & ipinfo.io Info</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body {background:#eef8fd;font-family:Segoe UI,Arial,sans-serif;color:#163355;}
+    .container {max-width:770px;margin:2em auto;background:#fff;padding:1.5em 2em 2em 2em;border-radius:13px;box-shadow:0 2px 14px 0 rgba(60,100,180,.07);}
+    h1 {text-align:center;color:#124475;font-size:1.45em;margin-bottom:1em;}
+    textarea {width:100%;min-height:60px;font-size:1.08em;border-radius:8px;border:2px solid #b5cff7;background:#f7fcfd;padding:.68em 1em;color:#223057;}
+    button {background: #246994; color: #fff; font-weight:600; font-size:1.05em; border:none; border-radius:7px; padding:.52em 1.4em; margin:1.1em .5em .7em 0; cursor:pointer;}
+    button:hover {background:#0a3754;}
+    .outbox {background:#f6fafd; font-family:monospace;font-size:1.07em;margin-top:1em;padding:.58em .7em .8em 1em;border-radius:8px;}
+    .none {color:#b11;}
+    th, td {padding:.32em .38em;}
+    table {width:100%;background:#fafdff;margin-top:1em;border-collapse:collapse;}
+    th {background:#e6effc;}
+    td,th {border:1px solid #dbe5ed;font-size:1em;}
+    input[type="checkbox"] {width:1.1em;height:1.1em;}
+    .ctrls {margin-top:.7em;}
+    .apibox {margin-bottom:1em;}
+    .small {font-size:.98em;color:#393;}
+    @media(max-width:599px){.container{padding:.7em .2em; th,td{font-size:.93em;} }}
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>IP Address Finder & Geo Info<br><span style="font-size:.93em;color:#256">Powered by ipinfo.io</span></h1>
+  <div class="apibox" style="display:none">
+    <b>Your ipinfo.io access token (optional):</b>
+    <input id="apikey" placeholder="Paste your token here" style="width:260px;padding:.2em;background:#eef6fd;">
+  </div>
+  <div>Paste a list of numbers (space, comma or line separated):</div>
+  <textarea id="nums" placeholder="E.g. 8 8 8 8 1 1 1 1"></textarea><br>
+  <button onclick="findIPs()">Find IPv4 Addresses & Info</button>
+  <div class="ctrls" style="display:none" id="controls">
+    <button onclick="selectAll(true)">Select All</button>
+    <button onclick="selectAll(false)">Deselect All</button>
+    <button onclick="downloadTxt()">Download TXT</button>
+    <button onclick="downloadCsv()">Download CSV</button>
+  </div>
+  <div id="output" class="outbox"></div>
+  <div id="ratewarn" class="small"></div>
+</div>
+<script>
+let ipResults = [];
+let selectedIPs = new Set();
+
+function findIPs() {
+  document.getElementById('output').innerHTML = "Searching...";
+  document.getElementById('ratewarn').textContent = "";
+  let input = document.getElementById('nums').value;
+  let token = (document.getElementById('apikey') ? document.getElementById('apikey').value.trim() : "");
+  let nums = (input.match(/-?\d+/g)||[]).map(Number);
+  let ips = new Set();
+  let n = nums.length;
+  // Ordered quadruple, no repeats; only if octets 0–255
+  for(let i=0;i<n;i++)
+    for(let j=0;j<n;j++) if(j!==i)
+      for(let k=0;k<n;k++) if(k!==i&&k!==j)
+        for(let l=0;l<n;l++) if(l!==i&&l!==j&&l!==k) {
+          let quad = [nums[i],nums[j],nums[k],nums[l]];
+          if(quad.every(x=>x>=0&&x<=255))
+            ips.add(quad.join('.'));
+        }
+  const arr = Array.from(ips);
+  ipResults = arr.map(ip=>({ip, org:"…", country:"…", region:"…", city:"…", lat:"", lon:"", loading:true}));
+  selectedIPs = new Set(arr.map((_,i)=>i)); // select all by default
+  renderTable();
+  if(arr.length) geolocateIPs(ipResults, token);
+  document.getElementById('controls').style.display = arr.length? 'block' : 'none';
+  if(arr.length>950) document.getElementById('ratewarn').textContent = "⚠️ Free API quota is 1,000 requests/day. If slow, try fewer inputs.";
+}
+
+function renderTable() {
+  if(!ipResults.length) {
+    document.getElementById('output').innerHTML = '<span class="none">No valid IP addresses found.</span>';
+    document.getElementById('controls').style.display = "none";
+    return;
+  }
+  let t = `<table><tr>
+    <th>Select</th><th>IP Address</th><th>ISP / Org</th>
+    <th>Country</th><th>Region/State</th><th>City</th>
+    <th>Latitude</th><th>Longitude</th>
+    </tr>`;
+  for(let i=0;i<ipResults.length;i++) {
+    let r = ipResults[i];
+    t += `<tr>
+    <td><input type="checkbox" ${selectedIPs.has(i)?"checked":""} onclick="toggleSel(${i})"></td>
+    <td>${r.ip}</td>
+    <td>${r.loading?'<span style="color:#888">…</span>':(r.org||'N/A')}</td>
+    <td>${r.loading?'<span style="color:#888">…</span>':(r.country||'N/A')}</td>
+    <td>${r.loading?'<span style="color:#888">…</span>':(r.region||'N/A')}</td>
+    <td>${r.loading?'<span style="color:#888">…</span>':(r.city||'N/A')}</td>
+    <td>${r.loading?'':(r.lat||'')}</td>
+    <td>${r.loading?'':(r.lon||'')}</td>
+    </tr>`;
+  }
+  t+="</table>";
+  document.getElementById('output').innerHTML = t;
+}
+
+function toggleSel(i) {
+  if(selectedIPs.has(i)) selectedIPs.delete(i);
+  else selectedIPs.add(i);
+}
+function selectAll(val) {
+  selectedIPs = new Set(val? ipResults.map((_,i)=>i):[]);
+  renderTable();
+}
+
+async function geolocateIPs(list, token) {
+  const headers = {};
+  if(token) headers.Authorization = "Bearer " + token;
+  for(let i=0; i<list.length; ++i) {
+    let ip = list[i].ip;
+    try {
+      // skip private/reserved to save quota
+      if(ip.match(/^(10|127|192\.168|172\.(1[6-9]|2\d|3[01]))\./)) {
+        list[i].org = "Private"; list[i].country = list[i].region = list[i].city = ""; list[i].lat = list[i].lon = ""; list[i].loading = false;
+        renderTable(); continue;
+      }
+      let url = `https://ipinfo.io/${ip}/json${token ? '?token='+encodeURIComponent(token) : ''}`;
+      let res = await fetch(url, {headers});
+      if(!res.ok) throw new Error("Network error");
+      let dat = await res.json();
+      if(dat && !dat.error) {
+        list[i].org = dat.org||"";
+        list[i].country = dat.country||"";
+        list[i].region = dat.region||"";
+        list[i].city = dat.city||"";
+        let loc = dat.loc ? dat.loc.split(",") : [];
+        list[i].lat = loc[0]||"";
+        list[i].lon = loc[1]||"";
+      } else {
+        list[i].org = "N/A"; list[i].country=list[i].region=list[i].city=""; list[i].lat=list[i].lon="";
+      }
+    } catch {
+      list[i].org = "N/A"; list[i].country=list[i].region=list[i].city=""; list[i].lat=list[i].lon="";
+    }
+    list[i].loading = false;
+    renderTable();
+  }
+}
+
+function downloadTxt() {
+  let heads = ["IP Address","ISP / Org","Country","Region/State","City","Latitude","Longitude"];
+  let rows = [heads.join('\t')];
+  for(let i=0;i<ipResults.length;i++) {
+    if(!selectedIPs.has(i)) continue;
+    let r = ipResults[i];
+    rows.push([r.ip,r.org,r.country||"",r.region||"",r.city||"",r.lat||"",r.lon||""].join('\t'));
+  }
+  let blob = new Blob([rows.join("\n")],{type:"text/plain"});
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement('a');
+  a.href=url; a.download="ip_addresses.txt";
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},110);
+}
+
+function downloadCsv() {
+  let heads = ["IP Address","ISP / Org","Country","Region/State","City","Latitude","Longitude"];
+  let rows = [heads.map(s=>'"'+s+'"').join(',')];
+  for(let i=0;i<ipResults.length;i++) {
+    if(!selectedIPs.has(i)) continue;
+    let r = ipResults[i];
+    rows.push([r.ip,r.org,r.country||"",r.region||"",r.city||"",r.lat||"",r.lon||""].map(
+      val => '"' + (val?String(val).replace(/"/g,'""'):"") + '"'
+    ).join(','));
+  }
+  let blob = new Blob([rows.join("\n")],{type:"text/csv"});
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement('a');
+  a.href=url; a.download="ip_addresses.csv";
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},110);
+}
+</script>
+</body>
+</html>
