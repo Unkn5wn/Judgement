@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Alphabet Code ⇄ Number Decipher (Regular/Inverse)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body {background:#f4fafd;font-family:Segoe UI,Arial,sans-serif;color:#143355;}
+    .container {max-width:540px;margin:2em auto;background:#fff;padding:1.6em 2em 2em 2em;border-radius:13px;box-shadow:0 2px 14px 0 rgba(60,100,180,.07);}
+    h1 {text-align:center;color:#2358a2;font-size:1.4em;}
+    textarea {width:100%;max-width:100%;min-height:75px;font-size:1.1em;border-radius:8px;border:2px solid #b5cff7;background:#f7fcfd;padding:.73em 1em;color:#223057;}
+    textarea:focus {border:2px solid #4ca6e4;outline:none;background:#fff;}
+    button {background: #26994f; color: #fff; font-weight:600; font-size:1.07em; border:none; border-radius:7px; padding:.6em 1.7em; margin:1em 0 .7em 0; cursor:pointer;}
+    button:hover {background:#156a33;}
+    select {font-size:1.07em;margin-left:.7em;}
+    .outbox {background:#f6fafd; font-family:monospace;font-size:1.16em;margin-top:0.9em;padding:.88em .7em .8em 1.2em;border-radius:8px;}
+    .missing {color:#c11; font-weight:bold;}
+    label {margin-left:.7em;}
+    @media(max-width:599px){.container{padding:.7em .2em;}}
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Alphabet Code ⇄ Number Decipher</h1>
+  <div>
+    Paste codes (A, Z, AA, AZ, BAAA...) separated by spaces, commas, or lines.<br>
+    <label>
+      Format:
+      <select id="mode">
+        <option value="regular">Regular (A=1, Z=26, AA=27...)</option>
+        <option value="inverse">Inverse (A=26, Z=1, AA=52...)</option>
+      </select>
+    </label>
+  </div>
+  <textarea id="codes" placeholder="E.g. A Z AA AZ BZZ"></textarea><br>
+  <button onclick="decipher()">Decipher</button>
+  <div id="output" class="outbox"></div>
+</div>
+<script>
+function codeToNumber(code) {
+  // Convert Excel column to number (A=1, Z=26, AA=27, etc.)
+  let sum=0;
+  for(let i=0;i<code.length;i++) {
+    let ch = code.charCodeAt(i);
+    if(ch<65 || ch>90) return null; // not A-Z
+    sum = sum*26 + (ch-64);
+  }
+  return sum||null;
+}
+function inverseValue(code) {
+  // Returns inverse: highest number of this letter count minus index+1
+  let n = codeToNumber(code);
+  if(n === null) return null;
+  let len = code.length;
+  // For n-letter code, how many total codes? Sum of k=1..len 26^k, but for inverse "bands" we use 26^len for codes of that length
+  let min = 1;
+  for(let i=1; i<len; ++i) min += Math.pow(26, i);
+  let max = min + Math.pow(26, len) - 1;
+  return (max - n + 1);
+}
+function decipher() {
+  let input = document.getElementById('codes').value;
+  let mode = document.getElementById('mode').value;
+  let codes = input.toUpperCase().match(/[A-Z]+/g) || [];
+  let mapped = codes.map(code => {
+    let val = (mode === "inverse" ? inverseValue(code) : codeToNumber(code));
+    return val!==null?val:`<span class="missing">?</span>`;
+  });
+  document.getElementById('output').innerHTML = mapped.join(' ');
+}
+</script>
+</body>
+</html>
