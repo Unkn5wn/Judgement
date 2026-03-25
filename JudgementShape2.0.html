@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Puerto Rico Lat/Lon Polygon+Status Finder, Category & KML</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body {background:#eef8fd;font-family:Segoe UI,Arial,sans-serif;color:#14223b;}
+    .container {max-width:970px;margin:2em auto;background:#fff;padding:2em 2em 2em 2em;border-radius:15px;box-shadow:0 2px 14px 0 rgba(60,80,160,.07);}
+    h1 {text-align:center;color:#14406b;}
+    textarea {width:100%;min-height:60px;font-size:1.08em;background:#f7fcfd;border-radius:8px;border:2px solid #b5cff7;padding:.65em 1em;margin-bottom:.15em;}
+    button {background: #246994; color: #fff; font-weight:600; font-size:1.07em; border:none; border-radius:7px; padding:.51em 1.2em; margin:.9em .5em .7em 0; cursor:pointer;}
+    button:hover {background:#175581;}
+    .outcount {margin: .6em 0;}
+    table {width:100%;margin-top:.8em;border-collapse:collapse;}
+    th, td {padding:.26em .55em;font-size:1.06em;text-align:left;}
+    th {background:#e4f0fa;}
+    tr:nth-child(even) {background:#f7fafc;}
+    .copymsg {color:#0a9b09;font-size:1.13em;display:inline;margin-left:.38em;}
+    .dls {margin:1em 0;}
+    .statuscol {font-weight:bold;}
+    .status-in {color:#138925;}
+    .status-out {color:#b98305;}
+    .status-ocean {color:#106aad;}
+    .catselect {margin:.6em 0;}
+    @media(max-width:800px){.container{padding:1em .2em; th,td{font-size:.97em;} }}
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Puerto Rico Lat/Lon Polygon+Status Finder</h1>
+  <div><b>Pasted Puerto Rico polygon from KML is built-in.</b></div>
+  <b>Paste your numbers</b> (comma, space, or line separated):<br>
+  <textarea id="numbers" placeholder="E.g. 434 12 573 14 ..."></textarea><br>
+  <button onclick="generateCoords()">Generate All Lat/Lon, with Polygon Status</button>
+  <div class="outcount" id="stat"></div>
+  <div class="catselect" id="catSelectRow" style="display:none"></div>
+  <div class="dls" id="dlrow" style="display:none">
+    <button onclick="downloadTxt()">Download Selected TXT</button>
+    <button onclick="downloadCSV()">Download Selected CSV</button>
+    <button onclick="downloadKML()">Download Selected KML</button>
+  </div>
+  <div id="output"></div>
+</div>
+<script>
+// Embedded KML string for Puerto Rico Polygon
+const KML_PR = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2" xmlns:kml="http://www.opengis.net/kml/2.2" xmlns:atom="http://www.w3.org/2005/Atom">
+<Document id="document">
+  <Folder id="5B388250DF000001">
+    <Placemark id="5B388250DF000002">
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              -67.28574694622702,18.36715662110608,0 -67.23558162007124,18.29367772306603,0 -67.20169149901335,18.28523626902626,0 -67.1877036543022,18.24018974238471,0 -67.1881122381882,18.15450898574423,0 -67.21303123642738,18.05961772239919,0 -67.23959679108154,17.93585670288688,0 -67.15211844584645,17.8976851743725,0 -66.94774614380283,17.90023621278574,0 -66.78121944735464,17.93499495861273,0 -66.62368787514194,17.93589267406777,0 -66.37154892915949,17.84533874966017,0 -66.20076091309467,17.89148442079258,0 -66.03090863280694,17.8940316674541,0 -65.87473048833284,17.98464888243473,0 -65.71167,18.067091,0 -65.597229,18.157975,0 -65.5707620682648,18.24785874064527,0 -65.6093386983149,18.38974787958794,0 -65.930359,18.515683,0 -66.13492237749625,18.47895541824046,0 -66.18597247053634,18.48359939401489,0 -66.23406343135262,18.46790597070396,0 -66.28753254422799,18.48710452751112,0 -66.36427972678111,18.48600817095095,0 -66.39806224989118,18.49446777356675,0 -66.44011830836904,18.48602083481705,0 -66.44711264949891,18.47242041031813,0 -66.52569393598522,18.48627302204967,0 -66.64666181241878,18.49606510168926,0 -66.67570411906603,18.49164085034733,0 -66.71231100298293,18.47668610801118,0 -66.81523192985986,18.49985277206539,0 -67.00086649604876,18.50403863674698,0 -67.02267798297977,18.51364867413644,0 -67.0581716018924,18.51664873222453,0 -67.12398206094444,18.51901213808735,0 -67.17619360728872,18.48315779852798,0 -67.16540652052821,18.41982512643602,0 -67.28574694622702,18.36715662110608,0 
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+  </Folder>
+</Document>
+</kml>`;
+const LAT_PREFIXES = [17.89, 17.99, 18.09, 18.19, 18.29, 18.39, 18.49, 18.59];
+const LON_PREFIXES = [
+  -67.95,-67.85,-67.75,-67.65,-67.55,-67.45,-67.35,-67.25,-67.15,-67.05,
+  -66.95,-66.85,-66.75,-66.65,-66.55,-66.45,-66.35,-66.25,-66.15,-66.05,
+  -65.95,-65.85,-65.75,-65.65,-65.55,-65.45,-65.35,-65.25,-65.21
+];
+// For "Out of PR"
+const PR_BOUNDS_WIDE = {latMin:17, latMax:20, lonMin:-70, lonMax:-64};
+
+let PR_POLYGONS = [];
+function parsePolygonFromKML(kml) {
+  const POLYS = [];
+  const parser = new DOMParser();
+  const xmldoc = parser.parseFromString(kml, "text/xml");
+  const polygonNodes = xmldoc.getElementsByTagName("Polygon");
+  for(let i=0;i<polygonNodes.length;++i){
+    const coords = polygonNodes[i].getElementsByTagName("coordinates");
+    for(let j=0;j<coords.length;++j){
+      const poly = coords[j].textContent.trim().split(/\s+/)
+         .map(x=>x.split(',').map(Number)).map(xy=>[xy[0],xy[1]]);
+      if(poly.length > 2) POLYS.push(poly);
+    }
+  }
+  return POLYS;
+}
+function pointInPolygon(lon, lat, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+    const intersect = ((yi > lat) != (yj > lat)) &&
+            (lon < (xj - xi) * (lat - yi) / (yj - yi + 1e-12) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+function anyPolygonContains(lon,lat){
+  for(let poly of PR_POLYGONS)
+    if(pointInPolygon(lon,lat,poly)) return true;
+  return false;
+}
+(function(){ PR_POLYGONS = parsePolygonFromKML(KML_PR); })();
+
+let allCombos = [];
+let selectedRows = new Set();
+const CATS = ["In PR","Out of PR","Ocean"];
+const CAT_COLORS = { "In PR": "status-in", "Out of PR": "status-out", "Ocean": "status-ocean" };
+
+function generateCoords() {
+  document.getElementById('stat').textContent = '';
+  document.getElementById('output').innerHTML = '';
+  document.getElementById('dlrow').style.display = 'none';
+  document.getElementById('catSelectRow').style.display = 'none';
+  selectedRows = new Set();
+  if (PR_POLYGONS.length === 0) {document.getElementById('stat').textContent = "Polygon was not parsed."; return;}
+  let numsStr = document.getElementById('numbers').value;
+  if (!numsStr.trim()) { document.getElementById('stat').textContent = "Please enter at least one number."; return;}
+  let nums = numsStr.split(/[\s,]+/).map(s=>s.trim()).filter(s=>s.length>0);
+  nums = nums.filter(n=>/^[-]?\d+$/.test(n));
+  if(nums.length === 0) { document.getElementById('stat').textContent = "No valid numbers found."; return;}
+  let combos = [];
+  for(let latPre of LAT_PREFIXES)
+    for(let lonPre of LON_PREFIXES)
+      for(let n of nums) {
+        let lat = parseFloat(latPre.toFixed(2)+n);
+        let lon = parseFloat(lonPre.toFixed(2)+n);
+        let status = "", cls = "";
+        if(anyPolygonContains(lon,lat)){
+          status = "In PR"; cls = "status-in";
+        } else if(lat >= PR_BOUNDS_WIDE.latMin && lat <= PR_BOUNDS_WIDE.latMax
+               && lon >= PR_BOUNDS_WIDE.lonMin && lon <= PR_BOUNDS_WIDE.lonMax) {
+          status = "Out of PR"; cls = "status-out";
+        } else {
+          status = "Ocean"; cls = "status-ocean";
+        }
+        combos.push({lat:lat.toFixed(8), lon:lon.toFixed(8), status, cls});
+      }
+  allCombos = combos;
+  document.getElementById('stat').textContent =
+    `Total: ${combos.length} | In PR: ${combos.filter(x=>x.status==='In PR').length} | Out of PR: ${combos.filter(x=>x.status==='Out of PR').length} | Ocean: ${combos.filter(x=>x.status==='Ocean').length}`;
+  if (combos.length) {
+    document.getElementById('dlrow').style.display = 'block';
+    document.getElementById('catSelectRow').style.display = 'block';
+  }
+  renderCatSelect();
+  renderTable();
+}
+function renderCatSelect() {
+  let html = `<label><input type="checkbox" onchange="selectAllToggle(this)" id="selectallbox"> <b>Select All</b></label>`;
+  for(const cat of CATS) {
+    html += ` &nbsp; <label>
+      <input type="checkbox" onchange="catSelectHandler('${cat}',this)" id="catbox_${cat.replace(/\s/g,'_')}"> <span class="${CAT_COLORS[cat]}">${cat}</span>
+    </label>`;
+  }
+  html += ` &nbsp; <label><input type="checkbox" onchange="clearAllToggle(this)" id="clearallbox"> <b>Clear All</b></label>`;
+  document.getElementById('catSelectRow').innerHTML = html;
+}
+function renderTable() {
+  let rows = allCombos.map((c,i)=>
+    `<tr>
+      <td><input type="checkbox" id="cb_${i}" ${selectedRows.has(i)?"checked":""} onclick="rowSelectHandler(${i},this)"></td>
+      <td>${i+1}</td>
+      <td>${c.lat}</td>
+      <td>${c.lon}</td>
+      <td class="statuscol ${c.cls}">${c.status}</td>
+      <td>
+        <button onclick="copyCoord('${c.lat}','${c.lon}','copymark_${i}')">Copy</button>
+        <span id="copymark_${i}" class="copymsg"></span>
+      </td>
+      <td>
+        <a href="https://earth.google.com/web/search/${c.lat},${c.lon}" target="_blank" rel="noopener">Google Earth</a>
+      </td>
+    </tr>`
+  );
+  document.getElementById('output').innerHTML = `<table>
+    <tr><th>Select</th><th>#</th><th>Latitude</th><th>Longitude</th><th>Status</th><th>Copy</th><th>Google Earth</th></tr>
+    ${rows.join("")}
+  </table>`;
+}
+function copyCoord(lat, lon, markId) {
+  navigator.clipboard.writeText(`${lat},${lon}`).then(()=>{
+    let e = document.getElementById(markId);
+    if (e) { e.innerHTML = "&#x2714;"; setTimeout(()=>{e.textContent='';}, 1000);}
+  });
+}
+function rowSelectHandler(i, box) {
+  if(box.checked) selectedRows.add(i); else selectedRows.delete(i);
+}
+function catSelectHandler(cat, box) {
+  for(let i=0; i<allCombos.length; ++i)
+    if(allCombos[i].status === cat)
+      if(box.checked) selectedRows.add(i); else selectedRows.delete(i);
+  renderTable();
+}
+function selectAllToggle(box) {
+  if(box.checked) {
+    for(let i=0;i<allCombos.length;++i) selectedRows.add(i);
+    for(const cat of CATS)
+      document.getElementById(`catbox_${cat.replace(/\s/g,'_')}`).checked = true;
+    document.getElementById('clearallbox').checked = false;
+  } else {
+    for(let i=0;i<allCombos.length;++i) selectedRows.delete(i);
+    for(const cat of CATS)
+      document.getElementById(`catbox_${cat.replace(/\s/g,'_')}`).checked = false;
+  }
+  renderTable();
+}
+function clearAllToggle(box) {
+  if(box.checked) {
+    for(let i=0;i<allCombos.length;++i) selectedRows.delete(i);
+    for(const cat of CATS)
+      document.getElementById(`catbox_${cat.replace(/\s/g,'_')}`).checked = false;
+    document.getElementById('selectallbox').checked = false;
+  }
+  renderTable();
+}
+function downloadTxt() {
+  if(!selectedRows.size) return alert("No rows selected.");
+  let lines = Array.from(selectedRows)
+    .map(i=>allCombos[i])
+    .map(c=>`${c.lat}\t${c.lon}\t${c.status}`);
+  let blob = new Blob([lines.join("\n")], {type:"text/plain"});
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement('a'); a.href=url; a.download="pr_latlon_Selected.txt";
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},110);
+}
+function downloadCSV() {
+  if(!selectedRows.size) return alert("No rows selected.");
+  let rows = ["Latitude,Longitude,Status"];
+  Array.from(selectedRows).forEach(i=>{
+    let c = allCombos[i]; rows.push(`${c.lat},${c.lon},${c.status}`);
+  });
+  let blob = new Blob([rows.join("\n")], {type:"text/csv"});
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement('a'); a.href=url; a.download="pr_latlon_Selected.csv";
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},110);
+}
+
+function downloadKML() {
+  if(!selectedRows.size) return alert("No rows selected.");
+  const colorKML = { // aabbggrr
+    "In PR":   "ff43b247", // green - Google style.
+    "Out of PR":"ff1cacd8", // orange
+    "Ocean":   "fff48131"  // blue (E.g. orange/blue)
+  };
+  // StyleMap and legend
+  let styleDefs = "", legend = "";
+  CATS.forEach((cat,i)=>{
+    styleDefs += `
+<Style id="cat${i+1}">
+  <IconStyle>
+    <color>${colorKML[cat]}</color>
+    <scale>1.45</scale>
+    <Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon>
+  </IconStyle>
+</Style>`;
+    legend += `<li><span style="color:#${colorKML[cat].substr(2,6)};font-weight:bold">${cat}</span></li>`;
+  });
+  let placemarks = Array.from(selectedRows)
+    .map(i=>allCombos[i])
+    .map((c)=>{
+      let catidx = CATS.indexOf(c.status)+1;
+      return `
+<Placemark>
+  <name>${c.status}: (${c.lat},${c.lon})</name>
+  <description><![CDATA[${c.status} coordinate]]></description>
+  <styleUrl>#cat${catidx}</styleUrl>
+  <Point><coordinates>${c.lon},${c.lat},0</coordinates></Point>
+</Placemark>`;
+    }).join("\n");
+  const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Puerto Rico Points - Category Colored</name>
+  ${styleDefs}
+  <Folder>
+    <name>Legend: <ul>${legend}</ul></name>
+    ${placemarks}
+  </Folder>
+</Document>
+</kml>`;
+  let blob = new Blob([kml], {type:"application/vnd.google-earth.kml+xml"});
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement('a'); a.href=url; a.download="pr_latlon_Selected.kml";
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},110);
+}
+</script>
+</body>
+</html>
