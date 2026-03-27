@@ -13,6 +13,9 @@
     button:hover {background:#267304;color:#e5ffc2;border-color:#b8fa3b;}
     #coordsout {white-space:pre-wrap;background:#151714;border:1px solid #43ED07;color:#43ED07;padding:1em;max-width:95%;margin:1.1em 0;font-size:.99em;}
     #status{margin:.7em 0;}
+    .utility-bar {margin-bottom:1em;}
+    .utility-bar input {margin-right:1em;}
+    .copied-msg {color:#b8fa3b;margin-left:1em;}
   </style>
 </head>
 <body>
@@ -23,16 +26,26 @@
   <button type="submit">Fetch OSM Boundary</button>
 </form>
 <div id="status"></div>
+<!-- Utility bar for filter/copy/report -->
+<div id="utility-bar" class="utility-bar" style="display:none;">
+  <input id="coord-filter" type="text" placeholder="Filter coordinates..." oninput="filterCoords()" aria-label="Filter coordinates"/>
+  <button id="copyBtn" onclick="copyCoords()">Copy Coordinates</button>
+  <button id="genReport" onclick="generateReport()">Generate Report</button>
+  <span id="copied-msg" class="copied-msg" style="display:none;">Copied!</span>
+</div>
 <div id="coordsout"></div>
 <button id="dlKml" style="display:none" onclick="downloadKML()">Download KML</button>
 </div>
 <script>
 let osmCoords = [];
 let cityName = "";
+let displayedLines = []; // For filtering
+
 async function getCityBorder() {
   document.getElementById("coordsout").textContent = "";
   document.getElementById("status").textContent = "Searching OSM Nominatim…";
   document.getElementById("dlKml").style.display = "none";
+  document.getElementById("utility-bar").style.display = "none";
   cityName = document.getElementById("city").value.trim();
   if (!cityName) {document.getElementById("status").textContent="Please enter a city name."; return;}
   // 1. Nominatim Lookup
@@ -42,6 +55,7 @@ async function getCityBorder() {
   // Take the biggest boundary (area), or first
   let best = ndata.reduce((a,b)=>((a.geojson&&b.geojson&&(Area(a.geojson)<Area(b.geojson)))?b:a),ndata[0]);
   document.getElementById("status").textContent = "Boundary found: "+(best.display_name||cityName);
+
   // Poly may be MultiPolygon or Polygon
   let geo = best.geojson;
   let coordsArr = [];
@@ -49,10 +63,94 @@ async function getCityBorder() {
   else if (geo.type === "MultiPolygon") coordsArr = geo.coordinates.flat();
   // 2. Show coords
   osmCoords = coordsArr[0].map(pt=>({lon:pt[0],lat:pt[1]}));
-  let coordLines = osmCoords.map((p,i)=>`${i+1}. ${p.lon},${p.lat}`).join('\n');
-  document.getElementById("coordsout").textContent = `Coordinates of ${best.display_name||cityName} boundary:\n${coordLines}`;
+  // Format as [lat, lon]
+  displayedLines = osmCoords.map((p,i)=>`${i+1}. [${p.lat}, ${p.lon}]`);
+  showCoords(displayedLines);
+  // Show filter/copy/report bar
+  document.getElementById("utility-bar").style.display = "block";
+  document.getElementById("coord-filter").value = "";
   document.getElementById("dlKml").style.display = "inline-block";
 }
+
+function showCoords(lines) {
+  document.getElementById("coordsout").textContent = `Coordinates of ${cityName} boundary:\n${lines.join('\n')}`;
+}
+
+function filterCoords() {
+  const filterVal = document.getElementById("coord-filter").value.trim();
+  if (!filterVal) {
+    showCoords(displayedLines);
+    return;
+  }
+  const filtered = displayedLines.filter(line => line.includes(filterVal));
+  showCoords(filtered.length ? filtered : ["No coordinates match your filter."]);
+}
+
+function copyCoords() {
+  // Copy currently displayed coords (without line numbers)
+  let out = document.getElementById("coordsout").textContent;
+  let lines = out.split('\n').slice(1).map(l=>l.replace(/^\d+\.\s*/,'')).filter(Boolean);
+  if (!lines.length) return;
+  navigator.clipboard.writeText(lines.join('\n'))
+    .then(() => {
+      let msg = document.getElementById("copied-msg");
+      msg.style.display='inline';
+      setTimeout(()=>{msg.style.display='none';},1200);
+    });
+}
+
+function getCurrentCoordinates() {
+  let out = document.getElementById("coordsout").textContent;
+  let lines = out.split('\n').slice(1).map(l=>l.replace(/^\d+\.\s*/,'')).filter(Boolean);
+  return lines;
+}
+
+// REPORT GENERATION FUNCTION
+function generateReport() {
+  const reportTitle = "City Border Boundary Coordinates Report";
+  const now = new Date();
+  const dateStr = now.toLocaleDateString();
+  const timeStr = now.toLocaleTimeString();
+  let cveNum = prompt("Enter CVE# (e.g., CVE-2024-1234):", "CVE-");
+  if (!cveNum) return;
+  cveNum = cveNum.trim().replace(/[^\w\-]/g, ''); // keep only safe chars
+
+  const cveDate = prompt("Enter CVE# Date (YYYY-MM-DD):", now.toISOString().slice(0,10));
+  if (!cveDate) return;
+
+  const cityStr = (cityName || "City").replace(/\W+/g, '_'); // move this up!
+  const coords = getCurrentCoordinates();
+
+  const textContent =
+`${reportTitle}
+----------------------------------------
+Date: ${dateStr}
+Time: ${timeStr}
+
+CVE#: ${cveNum}
+CVE# Date: ${cveDate}
+City: ${cityName}
+
+Coordinates:
+${coords.length ? coords.join('\n') : '[None]'}
+------------------------------------------------
+NOTE: This is a prototype. The accuracy of these coordinates must be checked for accuracy.
+`;
+
+  // File name: CVE-<cveNum>_<City>.txt
+  const fileName = `${dateStr}_${cveNum}_${cityStr}.txt`;
+
+  const blob = new Blob([textContent], {type: "text/plain"});
+  const url = URL.createObjectURL(blob);
+  const dl = document.createElement('a');
+  dl.href = url;
+  dl.download = fileName;
+  document.body.appendChild(dl);
+  dl.style.display = "none";
+  dl.click();
+  setTimeout(()=>{document.body.removeChild(dl);URL.revokeObjectURL(url);},1500);
+}
+
 // Simple geojson area estimate (for disambiguation)
 function Area(gj) {
   // rough: sum of polygon rings using Shoelace theorem, only outer
@@ -64,6 +162,7 @@ function Area(gj) {
   if(gj.type==='MultiPolygon') return gj.coordinates.reduce((a,poly)=>a+ringarea(poly[0]),0);
   return 0;
 }
+
 function downloadKML() {
   if (!osmCoords.length) return;
   let coordStr = osmCoords.map(p=>`${p.lon},${p.lat},0`).join('\n        ');
