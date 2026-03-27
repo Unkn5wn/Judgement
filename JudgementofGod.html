@@ -164,8 +164,21 @@ function Area(gj) {
 }
 
 function downloadKML() {
-  if (!osmCoords.length) return;
-  let coordStr = osmCoords.map(p=>`${p.lon},${p.lat},0`).join('\n        ');
+  // Get only currently displayed coordinates (filtered or all, as shown)
+  let lines = getCurrentCoordinates();
+  // Parse back to numbers from [lat, lon] string format:
+  let coords = lines
+    .map(line => {
+      // matches: [lat, lon]
+      let m = line.match(/\[([-\d.]+),\s*([-\d.]+)\]/);
+      return m ? { lat: parseFloat(m[1]), lon: parseFloat(m[2]) } : null;
+    })
+    .filter(Boolean);
+
+  if (!coords.length) return;
+
+  // Convert to KML "lon,lat,0"
+  let coordStr = coords.map(p => `${p.lon},${p.lat},0`).join('\n        ');
   let kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>
@@ -183,16 +196,18 @@ function downloadKML() {
   </Placemark>
 </Document>
 </kml>`;
-  let blob = new Blob([kml],{type:"application/vnd.google-earth.kml+xml"});
+
+  const fileName = `${(cityName || "City").replace(/\W+/g, '_')}_filtered.kml`;
+  let blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
   let url = URL.createObjectURL(blob);
   let dl = document.createElement('a');
   dl.href = url;
-  dl.download = `${cityName.replace(/\W+/g,'_')||"City"}.kml`;
+  dl.download = fileName;
   dl.textContent = "Download KML";
   dl.className = "dl";
   dl.style.display = "none";
   document.body.appendChild(dl);
-  setTimeout(()=>{ dl.click(); document.body.removeChild(dl); }, 70);
+  setTimeout(() => { dl.click(); document.body.removeChild(dl); }, 70);
 }
 </script>
 </body>
