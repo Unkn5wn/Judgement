@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Coordinate Formatter: [lat, lon]</title>
+  <title>Coordinate Formatter: [lon, lat]</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 2em; }
     textarea, pre { width: 100%; }
@@ -14,7 +14,7 @@
 </head>
 <body>
 
-  <h2>Coordinate Formatter: <span style="color: #007acc">[lat, lon],</span></h2>
+  <h2>Coordinate Formatter: <span style="color: #007acc">[lon, lat],</span></h2>
   
   <label for="input">Paste your coordinates (lon,lat,0 per line):</label>
   <textarea id="input" placeholder="Example:&#10;50.3327898,35.5909379,0&#10;50.3363967,35.5796417,0"></textarea>
@@ -22,7 +22,7 @@
   <br>
   <button onclick="formatCoords()">Format Coordinates</button>
   
-  <h3>Result ([lat, lon], per line):</h3>
+  <h3>Result ([lon, lat], per line):</h3>
   <pre id="output"></pre>
   
   <script>
@@ -36,7 +36,7 @@
           const lat = parts[1].trim();
           const lon = parts[0].trim();
           // Remove trailing zeros if present
-          return `[${lat}, ${lon}],`;
+          return `[${lon}, ${lat}],`;
         }
         return '';
       }).filter(l => l.length > 0).join('\n');
